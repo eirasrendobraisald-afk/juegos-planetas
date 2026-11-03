@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Misión: Órbita Perfecta - Juego del Sistema Solar</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti for Celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        rajdhani: ['Rajdhani', 'sans-serif'],
+                    },
+                    colors: {
+                        space: {
+                            900: '#030712',
+                            800: '#0B0F19',
+                            700: '#111827',
+                            card: '#181E2E'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #030712;
+            color: #f3f4f6;
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Animated Starry Background */
+        .stars-bg {
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            background-color: #fff;
+            border-radius: 50%;
+            animation: twinkle var(--duration, 3s) infinite ease-in-out var(--delay, 0s);
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 0.9; transform: scale(1.2); }
+        }
+
+        /* Sun Animation Glow */
+        .sun-glow {
+            box-shadow: 0 0 60px 20px rgba(245, 158, 11, 0.4), 0 0 100px 40px rgba(239, 68, 68, 0.2);
+            animation: pulse-sun 4s infinite alternate ease-in-out;
+        }
+
+        @keyframes pulse-sun {
+            0% { box-shadow: 0 0 50px 15px rgba(245, 158, 11, 0.4), 0 0 80px 30px rgba(239, 68, 68, 0.2); }
+            100% { box-shadow: 0 0 80px 25px rgba(245, 158, 11, 0.6), 0 0 120px 50px rgba(239, 68, 68, 0.4); }
+        }
+
+        /* Orbit Slot Styles */
+        .orbit-slot {
+            transition: all 0.3s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .orbit-slot.drag-over {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.2);
+            transform: scale(1.05);
+        }
+
+        .orbit-slot.selected-target {
+            border-color: #eab308;
+            background-color: rgba(234, 179, 8, 0.25);
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.5);
+            animation: target-pulse 1.2s infinite ease-in-out;
+        }
+
+        @keyframes target-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        /* Drag Item Styles */
+        .planet-card {
+            cursor: grab;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            touch-action: none;
+        }
+
+        .planet-card:active {
+            cursor: grabbing;
+        }
+
+        .planet-card.selected {
+            ring: 4px;
+            ring-color: #60a5fa;
+            transform: scale(1.08);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.8);
+        }
+
+        .planet-card.dragging {
+            opacity: 0.4;
+        }
+
+        /* Correct/Incorrect State Styles */
+        .slot-correct {
+            border-color: #10b981 !important;
+            background-color: rgba(16, 185, 129, 0.15) !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .slot-incorrect {
+            border-color: #ef4444 !important;
+            background-color: rgba(239, 68, 68, 0.15) !important;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(11, 15, 25, 0.8);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        /* Planet SVG Visual Highlights */
+        .planet-svg-glow {
+            filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.3));
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative">
+
+    <!-- Starry Background Canvas Element -->
+    <div id="stars-container" class="stars-bg"></div>
+
+    <!-- Header & Navigation Bar -->
+    <header class="w-full bg-space-800/80 backdrop-blur-md border-b border-gray-800 py-3 px-4 md:px-8 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+            <!-- Game Title -->
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600/30 rounded-xl border border-indigo-500/50">
+                    <i class="fa-solid me-1 fa-user-astronaut text-2xl text-indigo-400"></i>
+                </div>
+                <div>
+                    <h1 class="font-orbitron text-xl md:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400">
+                        MISIÓN: ÓRBITA PERFECTA
+                    </h1>
+                    <p class="text-xs text-gray-400 font-rajdhani">Coloca cada planeta en su posición correcta desde el Sol</p>
+                </div>
+            </div>
+
+            <!-- Stats Header Panel -->
+            <div class="flex items-center space-x-4 md:space-x-6">
+                <!-- Timer -->
+                <div class="flex items-center space-x-2 bg-space-900/80 border border-gray-700/60 rounded-lg px-3 py-1.5">
+                    <i class="fa-regular fa-clock text-amber-400 text-lg"></i>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-gray-400 uppercase tracking-wider leading-none">Tiempo</span>
+                        <span id="timer-display" class="font-orbitron text-base font-bold text-amber-300 leading-tight">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Attempts -->
+                <div class="flex items-center space-x-2 bg-space-900/80 border border-gray-700/60 rounded-lg px-3 py-1.5">
+                    <i class="fa-solid fa-bullseye text-cyan-400 text-lg"></i>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-gray-400 uppercase tracking-wider leading-none">Intentos</span>
+                        <span id="attempts-display" class="font-orbitron text-base font-bold text-cyan-300 leading-tight">0</span>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <button id="btn-reset" title="Reiniciar Juego" class="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg transition-colors border border-gray-700">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="max-w-7xl mx-auto w-full px-2 sm:px-4 py-4 flex-grow flex flex-col justify-between gap-6">
+
+        <!-- Instruction / Status Banner -->
+        <div id="instruction-bar" class="w-full bg-space-800/60 border border-indigo-900/50 rounded-xl p-3 text-center backdrop-blur-sm flex items-center justify-between px-6">
+            <div class="flex items-center space-x-3 text-sm md:text-base text-gray-300">
+                <i class="fa-solid fa-circle-info text-blue-400 text-lg"></i>
+                <span id="instruction-text">Arrastra los planetas a sus órbitas numeradas o <b>haz clic en un planeta</b> y luego en la <b>órbita vacía</b>.</span>
+            </div>
+            <button id="btn-help" class="text-xs text-indigo-400 hover:text-indigo-300 underline font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-lightbulb"></i> ¿Pista?
+            </button>
+        </div>
+
+        <!-- Solar System Board (Orbits Area) -->
+        <section class="w-full bg-space-card/70 border border-gray-800 rounded-2xl p-4 md:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden">
+            <!-- Board Label -->
+            <div class="flex justify-between items-center mb-4">
+                <span class="font-orbitron text-xs text-indigo-400 tracking-widest uppercase">
+                    <i class="fa-solid fa-circle-nodes mr-1"></i> Vista del Sistema Solar
+                </span>
+                <span class="text-xs text-gray-400 italic">Órbitas 1 a 8 desde el Sol</span>
+            </div>
+
+            <!-- Horizontal Scroll Container for Solar System View -->
+            <div class="overflow-x-auto pb-4 pt-2">
+                <div class="min-w-[900px] flex items-center justify-between gap-2 md:gap-3 px-2 relative">
+
+                    <!-- The Sun representation -->
+                    <div class="flex flex-col items-center justify-center shrink-0 mr-2 relative group cursor-pointer" onclick="openSunInfo()">
+                        <div class="w-20 h-36 md:w-24 md:h-44 bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-300 rounded-r-full sun-glow flex items-center justify-center border-r-4 border-yellow-200 relative">
+                            <span class="font-orbitron font-black text-space-900 -rotate-90 tracking-widest text-lg opacity-80 group-hover:opacity-100 transition-opacity">SOL</span>
+                        </div>
+                        <span class="text-xs text-amber-300 font-bold mt-2">Estrella Central</span>
+                    </div>
+
+                    <!-- 8 Orbit Slots -->
+                    <!-- Generated Dynamically or Structured statically in HTML for speed -->
+                    <div id="orbit-slots-container" class="flex-grow grid grid-cols-8 gap-2 md:gap-3">
+                        <!-- Slots generated by JS -->
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Unplaced Planets Dock / Deck Area -->
+        <section class="w-full bg-space-800/80 border border-gray-800 rounded-2xl p-4 backdrop-blur-md shadow-lg">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-orbitron text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-stacked text-purple-400"></i> Planetas Disponibles
+                </h3>
+                <span id="dock-counter" class="text-xs font-mono text-purple-300 bg-purple-950/60 border border-purple-800/50 rounded-full px-3 py-0.5">
+                    8 restantes
+                </span>
+            </div>
+
+            <!-- Planet Cards Deck -->
+            <div id="planets-dock" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 min-h-[130px] items-center p-2 bg-space-900/60 rounded-xl border border-gray-800/80">
+                <!-- Planet Cards will be generated here -->
+            </div>
+        </section>
+
+        <!-- Action Bar: Check Button -->
+        <div class="flex justify-center items-center py-2">
+            <button id="btn-check" class="font-orbitron font-bold text-lg px-8 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white rounded-xl shadow-lg shadow-indigo-600/30 border border-indigo-400/40 transform hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-3">
+                <i class="fa-solid fa-rocket"></i> COMPROBAR MISIÓN
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-gray-800/60 py-3 text-center text-xs text-gray-500 bg-space-900/90">
+        <p>Misión: Órbita Perfecta &bull; Aprende la colocación de los planetas del Sistema Solar</p>
+    </footer>
+
+    <!-- MODAL: Planet Educational Card / Fact Sheet -->
+    <div id="planet-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-space-card border border-gray-700 rounded-2xl max-w-lg w-full p-6 relative shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300" id="modal-content">
+            <!-- Modal Close Button -->
+            <button id="btn-close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-800/60 rounded-full p-2 w-9 h-9 flex items-center justify-center border border-gray-700">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <!-- Modal Content Layout -->
+            <div class="flex flex-col items-center text-center">
+                <!-- Planet Display Badge -->
+                <div id="modal-planet-icon" class="w-28 h-28 my-2 flex items-center justify-center relative">
+                    <!-- Planet SVG rendered dynamically -->
+                </div>
+
+                <span id="modal-planet-number" class="text-xs font-orbitron text-indigo-400 tracking-widest uppercase mt-1">Órbita #1</span>
+                <h2 id="modal-planet-name" class="font-orbitron text-3xl font-black text-white mb-2">MERCURIO</h2>
+
+                <!-- Planet Badges Grid -->
+                <div class="grid grid-cols-2 gap-2 w-full my-4 text-xs font-rajdhani">
+                    <div class="bg-space-900/80 border border-gray-800 p-2 rounded-lg flex flex-col items-center">
+                        <span class="text-gray-400">Tipo</span>
+                        <span id="modal-planet-type" class="font-bold text-indigo-300 text-sm">Rocoso</span>
+                    </div>
+                    <div class="bg-space-900/80 border border-gray-800 p-2 rounded-lg flex flex-col items-center">
+                        <span class="text-gray-400">Diámetro relativo</span>
+                        <span id="modal-planet-size" class="font-bold text-cyan-300 text-sm">4.879 km</span>
+                    </div>
+                </div>
+
+                <!-- Fact Box -->
+                <div class="bg-indigo-950/30 border border-indigo-800/40 rounded-xl p-4 w-full text-left mb-4">
+                    <h4 class="font-orbitron text-xs font-bold text-indigo-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-lightbulb text-amber-400"></i> DATO CURIOSO
+                    </h4>
+                    <p id="modal-planet-fact" class="text-sm text-gray-300 leading-relaxed">
+                        Es el planeta más cercano al Sol y también el más pequeño del sistema solar.
+                    </p>
+                </div>
+
+                <!-- Action button -->
+                <button onclick="closePlanetModal()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-indigo-300 font-orbitron font-semibold text-sm rounded-xl border border-gray-700 transition-colors">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Mission Victory Celebration -->
+    <div id="victory-modal" class="fixed inset-0 bg-black/85 backdrop-blur-lg z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-space-card border-2 border-emerald-500/50 rounded-2xl max-w-md w-full p-6 text-center relative shadow-2xl shadow-emerald-500/20">
+            <div class="w-20 h-20 bg-emerald-500/20 rounded-full border border-emerald-400/50 flex items-center justify-center mx-auto mb-4 text-emerald-400 text-4xl">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+
+            <h2 class="font-orbitron text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200 mb-1">
+                ¡MISIÓN CUMPLIDA!
+            </h2>
+            <p class="text-sm text-gray-300 mb-6">Has completado el mapa del Sistema Solar con éxito absoluto.</p>
+
+            <!-- Results Summary Grid -->
+            <div class="grid grid-cols-2 gap-3 mb-6 font-orbitron">
+                <div class="bg-space-900/90 border border-gray-800 p-3 rounded-xl">
+                    <span class="text-xs text-gray-400 block mb-0.5">TIEMPO</span>
+                    <span id="victory-time" class="text-xl font-bold text-amber-400">01:25</span>
+                </div>
+                <div class="bg-space-900/90 border border-gray-800 p-3 rounded-xl">
+                    <span class="text-xs text-gray-400 block mb-0.5">INTENTOS</span>
+                    <span id="victory-attempts" class="text-xl font-bold text-cyan-400">1</span>
+                </div>
+            </div>
+
+            <button id="btn-play-again" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-orbitron font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all">
+                VOLVER A JUGAR
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL: Custom Toast Notification Alert -->
+    <div id="toast-msg" class="fixed bottom-6 right-6 bg-space-card border border-indigo-500/50 text-gray-200 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-info text-indigo-400 text-xl"></i>
+        <span id="toast-text" class="text-sm font-semibold">Mensaje de notificación</span>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- DATASET: SOLAR SYSTEM PLANETS ---
+        const PLANETS = [
+            {
+                id: 'mercury',
+                order: 1,
+                name: 'Mercurio',
+                type: 'Terrestre / Rocoso',
+                size: '4.879 km',
+                color: '#9e9e9e',
+                gradient: ['#9e9e9e', '#616161'],
+                fact: 'Es el planeta más cercano al Sol y el más pequeño del sistema solar. ¡Un año aquí dura solo 88 días terrestres, pero sus días son larguísimos!',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="35" fill="url(#grad-mercury)" /><defs><radialGradient id="grad-mercury"><stop offset="0%" stop-color="#d6d6d6"/><stop offset="70%" stop-color="#8a8a8a"/><stop offset="100%" stop-color="#4a4a4a"/></radialGradient></defs><circle cx="40" cy="35" r="5" fill="#666" opacity="0.4"/><circle cx="60" cy="55" r="7" fill="#666" opacity="0.3"/><circle cx="45" cy="65" r="4" fill="#666" opacity="0.4"/></svg>`
+            },
+            {
+                id: 'venus',
+                order: 2,
+                name: 'Venus',
+                type: 'Terrestre / Rocoso',
+                size: '12.104 km',
+                color: '#e5a752',
+                gradient: ['#f59e0b', '#b45309'],
+                fact: 'Es el planeta más caliente de todos debido a un denso efecto invernadero. ¡Gira en dirección contraria a la mayoría de los demás planetas!',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="38" fill="url(#grad-venus)" /><defs><radialGradient id="grad-venus"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#ca8a04"/></radialGradient></defs><path d="M 20 40 Q 50 35 80 45 Q 50 50 20 40 Z" fill="#a16207" opacity="0.3"/><path d="M 15 60 Q 50 55 85 62 Q 50 70 15 60 Z" fill="#a16207" opacity="0.25"/></svg>`
+            },
+            {
+                id: 'earth',
+                order: 3,
+                name: 'Tierra',
+                type: 'Terrestre / Habitable',
+                size: '12.742 km',
+                color: '#3b82f6',
+                gradient: ['#60a5fa', '#1d4ed8'],
+                fact: 'Nuestro hogar. Es el único planeta conocido con agua líquida en superficie y vida. El 71% de su superficie está cubierta por océanos.',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="40" fill="url(#grad-earth)" /><defs><radialGradient id="grad-earth"><stop offset="0%" stop-color="#60a5fa"/><stop offset="60%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1e40af"/></radialGradient></defs><path d="M 30 30 Q 40 20 55 30 T 45 50 T 25 40 Z" fill="#22c55e" opacity="0.85"/><path d="M 55 55 Q 75 50 70 75 T 45 75 Z" fill="#15803d" opacity="0.85"/><path d="M 35 70 Q 25 80 45 85 Z" fill="#22c55e" opacity="0.8"/></svg>`
+            },
+            {
+                id: 'mars',
+                order: 4,
+                name: 'Marte',
+                type: 'Terrestre / Rocoso',
+                size: '6.779 km',
+                color: '#ef4444',
+                gradient: ['#f87171', '#991b1b'],
+                fact: 'Conocido como el "Planeta Rojo" por el óxido de hierro en su suelo. Alberga el Monte Olimpo, el volcán más grande de todo el Sistema Solar.',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="36" fill="url(#grad-mars)" /><defs><radialGradient id="grad-mars"><stop offset="0%" stop-color="#f87171"/><stop offset="70%" stop-color="#dc2626"/><stop offset="100%" stop-color="#7f1d1d"/></radialGradient></defs><circle cx="35" cy="30" r="6" fill="#7f1d1d" opacity="0.4"/><circle cx="65" cy="60" r="10" fill="#7f1d1d" opacity="0.3"/><ellipse cx="50" cy="16" rx="14" ry="4" fill="#ffffff" opacity="0.7"/></svg>`
+            },
+            {
+                id: 'jupiter',
+                order: 5,
+                name: 'Júpiter',
+                type: 'Gigante Gaseoso',
+                size: '139.820 km',
+                color: '#f97316',
+                gradient: ['#fb923c', '#c2410c'],
+                fact: '¡El rey de los planetas! Es el más grande de todos. Su famosa "Gran Mancha Roja" es una tormenta gigantesca en la que cabría la Tierra entera.',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="45" fill="url(#grad-jupiter)" /><defs><radialGradient id="grad-jupiter"><stop offset="0%" stop-color="#fdba74"/><stop offset="60%" stop-color="#ea580c"/><stop offset="100%" stop-color="#9a3412"/></radialGradient></defs><path d="M 6 35 Q 50 30 94 35 Q 50 42 6 35 Z" fill="#9a3412" opacity="0.6"/><path d="M 5 50 Q 50 45 95 50 Q 50 57 5 50 Z" fill="#c2410c" opacity="0.5"/><path d="M 7 65 Q 50 60 93 65 Q 50 72 7 65 Z" fill="#9a3412" opacity="0.6"/><ellipse cx="65" cy="60" rx="9" ry="6" fill="#b91c1c" opacity="0.85"/></svg>`
+            },
+            {
+                id: 'saturn',
+                order: 6,
+                name: 'Saturno',
+                type: 'Gigante Gaseoso',
+                size: '116.460 km',
+                color: '#eab308',
+                gradient: ['#fde047', '#a16207'],
+                fact: 'Famoso por su deslumbrante sistema de anillos formados por hielo, polvo y rocas. Es tan ligero que flotaría si hubiera un océano lo bastante grande.',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><g transform="rotate(-15 50 50)"><ellipse cx="50" cy="50" rx="46" ry="12" fill="none" stroke="#fef08a" stroke-width="6" opacity="0.8"/><ellipse cx="50" cy="50" rx="40" ry="10" fill="none" stroke="#ca8a04" stroke-width="3" opacity="0.9"/><circle cx="50" cy="50" r="32" fill="url(#grad-saturn)" /><ellipse cx="50" cy="50" rx="46" ry="12" fill="none" stroke="#fef08a" stroke-width="6" clip-path="url(#saturn-clip)" opacity="0.8"/><defs><radialGradient id="grad-saturn"><stop offset="0%" stop-color="#fef08a"/><stop offset="70%" stop-color="#eab308"/><stop offset="100%" stop-color="#854d0e"/></radialGradient><clipPath id="saturn-clip"><rect x="0" y="50" width="100" height="50"/></clipPath></defs></g></svg>`
+            },
+            {
+                id: 'uranus',
+                order: 7,
+                name: 'Urano',
+                type: 'Gigante Helado',
+                size: '50.724 km',
+                color: '#06b6d4',
+                gradient: ['#67e8f9', '#0e7490'],
+                fact: 'Un gigante helado de color azul verdoso debido al metano de su atmósfera. Lo más curioso es que gira "tumbado" de lado respecto a su órbita.',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><g transform="rotate(75 50 50)"><ellipse cx="50" cy="50" rx="42" ry="8" fill="none" stroke="#a5f3fc" stroke-width="2" opacity="0.6"/><circle cx="50" cy="50" r="36" fill="url(#grad-uranus)" /><defs><radialGradient id="grad-uranus"><stop offset="0%" stop-color="#a5f3fc"/><stop offset="60%" stop-color="#0891b2"/><stop offset="100%" stop-color="#164e63"/></radialGradient></defs></g></svg>`
+            },
+            {
+                id: 'neptune',
+                order: 8,
+                name: 'Neptuno',
+                type: 'Gigante Helado',
+                size: '49.244 km',
+                color: '#2563eb',
+                gradient: ['#60a5fa', '#1e3a8a'],
+                fact: 'El planeta más alejado del Sol. Es un mundo muy frío y oscuro donde soplan los vientos más violentos de todo el Sistema Solar (¡hasta 2.000 km/h!).',
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full planet-svg-glow"><circle cx="50" cy="50" r="36" fill="url(#grad-neptune)" /><defs><radialGradient id="grad-neptune"><stop offset="0%" stop-color="#60a5fa"/><stop offset="70%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1e3a8a"/></radialGradient></defs><path d="M 20 40 Q 50 30 80 45" fill="none" stroke="#93c5fd" stroke-width="2" opacity="0.5"/><path d="M 15 65 Q 50 55 85 60" fill="none" stroke="#93c5fd" stroke-width="2" opacity="0.4"/></svg>`
+            }
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let boardState = Array(8).fill(null); // Orbit slots 0 to 7
+        let selectedPlanetId = null; // For tap-to-select placement
+        let timerInterval = null;
+        let secondsElapsed = 0;
+        let attemptsCount = 0;
+        let gameStarted = false;
+
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            createBackgroundStars();
+            initGame();
+            setupEventListeners();
+        });
+
+        function createBackgroundStars() {
+            const container = document.getElementById('stars-container');
+            const count = 100;
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                const size = Math.random() * 2.5 + 1;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.setProperty('--duration', `${2 + Math.random() * 4}s`);
+                star.style.setProperty('--delay', `${Math.random() * 3}s`);
+                container.appendChild(star);
+            }
+        }
+
+        function initGame() {
+            // Reset variables
+            boardState = Array(8).fill(null);
+            selectedPlanetId = null;
+            attemptsCount = 0;
+            secondsElapsed = 0;
+            gameStarted = false;
+
+            clearInterval(timerInterval);
+            document.getElementById('timer-display').textContent = '00:00';
+            document.getElementById('attempts-display').textContent = '0';
+
+            renderOrbitSlots();
+            renderPlanetsDock();
+            updateDockCounter();
+        }
+
+        function startTimer() {
+            if (gameStarted) return;
+            gameStarted = true;
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                const mins = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+                const secs = (secondsElapsed % 60).toString().padStart(2, '0');
+                document.getElementById('timer-display').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderOrbitSlots() {
+            const container = document.getElementById('orbit-slots-container');
+            container.innerHTML = '';
+
+            for (let i = 0; i < 8; i++) {
+                const slotIndex = i;
+                const placedPlanet = boardState[slotIndex];
+
+                const slot = document.createElement('div');
+                slot.className = `orbit-slot relative flex flex-col items-center justify-between p-2 rounded-2xl border-2 border-dashed border-gray-700/80 bg-space-900/40 min-h-[160px] transition-all duration-200`;
+                slot.dataset.slotIndex = slotIndex;
+
+                // Slot Number Indicator Header
+                const slotHeader = document.createElement('div');
+                slotHeader.className = "w-full flex justify-between items-center text-[10px] font-orbitron font-bold text-gray-500 mb-1 px-1";
+                slotHeader.innerHTML = `<span>ÓRBITA</span> <span class="bg-gray-800 text-indigo-300 w-5 h-5 rounded-full flex items-center justify-center">${slotIndex + 1}</span>`;
+                slot.appendChild(slotHeader);
+
+                // Slot Content Body
+                const contentArea = document.createElement('div');
+                contentArea.className = "flex-grow w-full flex flex-col items-center justify-center cursor-pointer";
+
+                if (placedPlanet) {
+                    contentArea.innerHTML = `
+                        <div class="w-16 h-16 md:w-20 md:h-20 mb-1 pointer-events-none">
+                            ${placedPlanet.svg}
+                        </div>
+                        <span class="text-xs md:text-sm font-bold text-gray-200 font-rajdhani mt-1">${placedPlanet.name}</span>
+                    `;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="w-12 h-12 rounded-full border border-gray-800 flex items-center justify-center text-gray-600 mb-1">
+                            <i class="fa-solid fa-plus text-sm opacity-40"></i>
+                        </div>
+                        <span class="text-[11px] text-gray-600 font-semibold font-rajdhani uppercase tracking-wider">Vacía</span>
+                    `;
+                }
+                slot.appendChild(contentArea);
+
+                // Slot Interactive Action Icons (if placed, show remove & info button)
+                if (placedPlanet) {
+                    const actionsBar = document.createElement('div');
+                    actionsBar.className = "flex items-center space-x-2 mt-1 z-10";
+                    
+                    const infoBtn = document.createElement('button');
+                    infoBtn.className = "text-gray-400 hover:text-indigo-300 text-xs p-1";
+                    infoBtn.title = "Ver información";
+                    infoBtn.innerHTML = `<i class="fa-solid fa-circle-info"></i>`;
+                    infoBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openPlanetModal(placedPlanet);
+                    };
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = "text-gray-400 hover:text-red-400 text-xs p-1";
+                    removeBtn.title = "Quitar de esta órbita";
+                    removeBtn.innerHTML = `<i class="fa-solid fa-xmark"></i>`;
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        removePlanetFromSlot(slotIndex);
+                    };
+
+                    actionsBar.appendChild(infoBtn);
+                    actionsBar.appendChild(removeBtn);
+                    slot.appendChild(actionsBar);
+                }
+
+                // Setup Drag & Drop & Tap events for Orbit Slot
+                slot.addEventListener('dragover', handleDragOver);
+                slot.addEventListener('dragleave', handleDragLeave);
+                slot.addEventListener('drop', (e) => handleDrop(e, slotIndex));
+                slot.addEventListener('click', () => handleSlotClick(slotIndex));
+
+                container.appendChild(slot);
+            }
+        }
+
+        function renderPlanetsDock() {
+            const dock = document.getElementById('planets-dock');
+            dock.innerHTML = '';
+
+            // Filter planets that are not yet placed on the board
+            const placedIds = boardState.filter(p => p !== null).map(p => p.id);
+            const availablePlanets = PLANETS.filter(p => !placedIds.includes(p.id));
+
+            // Shuffle available planets if brand new game state
+            if (!gameStarted && boardState.every(s => s === null)) {
+                availablePlanets.sort(() => Math.random() - 0.5);
+            }
+
+            if (availablePlanets.length === 0) {
+                dock.innerHTML = `
+                    <div class="col-span-full py-4 text-center text-xs text-indigo-300 font-orbitron">
+                        <i class="fa-solid fa-circle-check text-emerald-400 mr-1 text-sm"></i> Todos los planetas colocados en el mapa
+                    </div>
+                `;
+                return;
+            }
+
+            availablePlanets.forEach(planet => {
+                const card = document.createElement('div');
+                card.draggable = true;
+                card.dataset.planetId = planet.id;
+                card.className = `planet-card bg-space-900/90 border border-gray-700/80 hover:border-indigo-500/70 rounded-xl p-2.5 flex flex-col items-center justify-center transition-all ${selectedPlanetId === planet.id ? 'selected' : ''}`;
+
+                card.innerHTML = `
+                    <div class="w-12 h-12 md:w-14 md:h-14 mb-1 pointer-events-none">
+                        ${planet.svg}
+                    </div>
+                    <span class="text-xs font-bold text-gray-200 font-rajdhani text-center leading-tight">${planet.name}</span>
+                `;
+
+                // Drag Events
+                card.addEventListener('dragstart', (e) => handleDragStart(e, planet.id));
+                card.addEventListener('dragend', handleDragEnd);
+
+                // Click / Tap Event for Tap Placement
+                card.addEventListener('click', () => handlePlanetCardClick(planet.id));
+
+                dock.appendChild(card);
+            });
+        }
+
+        function updateDockCounter() {
+            const placedCount = boardState.filter(p => p !== null).length;
+            const remaining = 8 - placedCount;
+            document.getElementById('dock-counter').textContent = `${remaining} restante${remaining !== 1 ? 's' : ''}`;
+        }
+
+        // --- INTERACTION HANDLERS ---
+        function handlePlanetCardClick(planetId) {
+            startTimer();
+            if (selectedPlanetId === planetId) {
+                selectedPlanetId = null; // Deselect
+            } else {
+                selectedPlanetId = planetId; // Select
+                showToast(`Seleccionaste ${PLANETS.find(p => p.id === planetId).name}. Toca una órbita.`, 'info');
+            }
+            renderPlanetsDock();
+            highlightSelectedTargetSlots();
+        }
+
+        function handleSlotClick(slotIndex) {
+            startTimer();
+
+            // If a planet in dock is selected, place it here
+            if (selectedPlanetId) {
+                const planetToPlace = PLANETS.find(p => p.id === selectedPlanetId);
+                boardState[slotIndex] = planetToPlace;
+                selectedPlanetId = null;
+                renderOrbitSlots();
+                renderPlanetsDock();
+                updateDockCounter();
+                clearSlotHighlights();
+                return;
+            }
+
+            // If no planet selected and slot is empty, give feedback
+            if (!boardState[slotIndex]) {
+                showToast('Primero selecciona o arrastra un planeta aquí.', 'info');
+            }
+        }
+
+        function highlightSelectedTargetSlots() {
+            const slots = document.querySelectorAll('.orbit-slot');
+            slots.forEach((slot, idx) => {
+                if (selectedPlanetId && !boardState[idx]) {
+                    slot.classList.add('selected-target');
+                } else {
+                    slot.classList.remove('selected-target');
+                }
+            });
+        }
+
+        function clearSlotHighlights() {
+            const slots = document.querySelectorAll('.orbit-slot');
+            slots.forEach(slot => {
+                slot.classList.remove('selected-target', 'drag-over');
+            });
+        }
+
+        function removePlanetFromSlot(slotIndex) {
+            boardState[slotIndex] = null;
+            renderOrbitSlots();
+            renderPlanetsDock();
+            updateDockCounter();
+            clearValidationStyles();
+        }
+
+        // --- DRAG AND DROP API HANDLERS ---
+        function handleDragStart(e, planetId) {
+            startTimer();
+            e.dataTransfer.setData('text/plain', planetId);
+            e.target.classList.add('dragging');
+            selectedPlanetId = planetId;
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleDrop(e, slotIndex) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            const planetId = e.dataTransfer.getData('text/plain') || selectedPlanetId;
+
+            if (planetId) {
+                const planetToPlace = PLANETS.find(p => p.id === planetId);
+                boardState[slotIndex] = planetToPlace;
+                selectedPlanetId = null;
+                renderOrbitSlots();
+                renderPlanetsDock();
+                updateDockCounter();
+                clearValidationStyles();
+            }
+        }
+
+        // --- VALIDATION AND CHECK MISSION ---
+        function checkMission() {
+            // Check if all slots are filled
+            const filledSlots = boardState.filter(p => p !== null).length;
+            if (filledSlots < 8) {
+                showToast(`Debes colocar los 8 planetas antes de comprobar. (${filledSlots}/8)`, 'warning');
+                return;
+            }
+
+            attemptsCount++;
+            document.getElementById('attempts-display').textContent = attemptsCount;
+
+            const slotElements = document.querySelectorAll('.orbit-slot');
+            let correctCount = 0;
+
+            boardState.forEach((planet, idx) => {
+                const expectedOrder = idx + 1;
+                const slotEl = slotElements[idx];
+
+                slotEl.classList.remove('slot-correct', 'slot-incorrect');
+
+                if (planet && planet.order === expectedOrder) {
+                    correctCount++;
+                    slotEl.classList.add('slot-correct');
+                } else {
+                    slotEl.classList.add('slot-incorrect');
+                }
+            });
+
+            if (correctCount === 8) {
+                // Victory!
+                clearInterval(timerInterval);
+                triggerVictory();
+            } else {
+                showToast(`Tienes ${correctCount} de 8 planetas en la posición correcta. ¡Revisa los marcados en rojo!`, 'error');
+            }
+        }
+
+        function clearValidationStyles() {
+            const slotElements = document.querySelectorAll('.orbit-slot');
+            slotElements.forEach(el => {
+                el.classList.remove('slot-correct', 'slot-incorrect');
+            });
+        }
+
+        function triggerVictory() {
+            // Confetti Explosion
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            // Update victory modal texts
+            document.getElementById('victory-time').textContent = document.getElementById('timer-display').textContent;
+            document.getElementById('victory-attempts').textContent = attemptsCount;
+
+            // Show victory modal
+            const victoryModal = document.getElementById('victory-modal');
+            victoryModal.classList.remove('hidden');
+        }
+
+        // --- MODAL & TOAST UTILITIES ---
+        function openPlanetModal(planet) {
+            document.getElementById('modal-planet-icon').innerHTML = planet.svg;
+            document.getElementById('modal-planet-number').textContent = `ÓRBITA #${planet.order} DESDE EL SOL`;
+            document.getElementById('modal-planet-name').textContent = planet.name.toUpperCase();
+            document.getElementById('modal-planet-type').textContent = planet.type;
+            document.getElementById('modal-planet-size').textContent = planet.size;
+            document.getElementById('modal-planet-fact').textContent = planet.fact;
+
+            const modal = document.getElementById('planet-modal');
+            const modalContent = document.getElementById('modal-content');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closePlanetModal() {
+            const modal = document.getElementById('planet-modal');
+            const modalContent = document.getElementById('modal-content');
+
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function openSunInfo() {
+            openPlanetModal({
+                order: 0,
+                name: 'El Sol',
+                type: 'Estrella Enana Amarilla',
+                size: '1.392.700 km',
+                fact: 'El Sol contiene el 99.8% de toda la masa de todo el Sistema Solar. Su fuerza de gravedad es la que mantiene a todos los planetas girando a su alrededor en sus órbitas.',
+                svg: `<div class="w-24 h-24 bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-300 rounded-full sun-glow flex items-center justify-center border-2 border-yellow-200"></div>`
+            });
+        }
+
+        function showHint() {
+            showToast('Pista: Los planetas rocosos (Mercurio, Venus, Tierra, Marte) están más cerca del Sol que los gigantes gaseosos.', 'info');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast-msg');
+            const toastText = document.getElementById('toast-text');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastText.textContent = message;
+
+            if (type === 'error') {
+                toastIcon.className = "fa-solid fa-circle-xmark text-red-400 text-xl";
+                toast.style.borderColor = "rgba(239, 68, 68, 0.5)";
+            } else if (type === 'warning') {
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400 text-xl";
+                toast.style.borderColor = "rgba(245, 158, 11, 0.5)";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-info text-indigo-400 text-xl";
+                toast.style.borderColor = "rgba(99, 102, 241, 0.5)";
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('btn-check').addEventListener('click', checkMission);
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                if (confirm('¿Quieres reiniciar la misión y restablecer las posiciones?')) {
+                    initGame();
+                    showToast('Juego reiniciado.', 'info');
+                }
+            });
+
+            document.getElementById('btn-close-modal').addEventListener('click', closePlanetModal);
+            document.getElementById('btn-help').addEventListener('click', showHint);
+
+            document.getElementById('btn-play-again').addEventListener('click', () => {
+                document.getElementById('victory-modal').classList.add('hidden');
+                initGame();
+            });
+
+            // Close modal when clicking dark backdrop
+            document.getElementById('planet-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'planet-modal') {
+                    closePlanetModal();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
